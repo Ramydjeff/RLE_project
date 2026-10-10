@@ -24,6 +24,7 @@ DOSSIER_SORTIE = "sorties"
 contexte = {
     "image": None,          # tableau numpy 2D, ou None
     "dernier_rle": None,    # chemin du dernier fichier .rle ecrit
+    "dernieres_stats": None, # dictionnaire des dernieres stats de compression
     "mode_texte": False,    # True si OpenCV ne peut pas ouvrir de fenetre
 }
 
@@ -75,6 +76,7 @@ def option_compresser():
 
     # trace=True -> affiche le tableau detaille exige par le prof
     stats = fileio.save_rle(chemin, contexte["image"], trace=True)
+    contexte["dernieres_stats"] = stats
 
     fileio.afficher_stats(stats, "COMPRESSION")
     print(f"Fichier ecrit : {chemin}")
@@ -98,8 +100,9 @@ def option_decompresser():
         print(f"ERREUR : {erreur}\n")
         return
 
+    contexte["dernieres_stats"] = stats
     fileio.afficher_stats(stats, "DECOMPRESSION")
-    draw.afficher_texte(img, "Image reconstruite")
+    draw.afficher_texte(img, "Image reconstruite", stats=stats)
 
     # Si on a encore l'originale, on verifie que rien n'a ete perdu
     original = contexte["image"]
@@ -113,9 +116,9 @@ def option_decompresser():
 
     if not contexte["mode_texte"]:
         if original is not None and original.shape == img.shape:
-            draw.show_comparaison(original, img)
+            draw.show_comparaison(original, img, stats=stats)
         else:
-            draw.show(img, "Image decompressee")
+            draw.show(img, "Image decompressee", stats=stats)
 
 
 # ---------------------------------------------------------------------------
@@ -133,18 +136,22 @@ def option_demo_complete():
     print("\n--- Etape : compression ---")
     chemin = os.path.join(DOSSIER_SORTIE, "demo.rle")
     stats = fileio.save_rle(chemin, contexte["image"], trace=True)
+    contexte["dernieres_stats"] = stats
     fileio.afficher_stats(stats, "COMPRESSION")
     contexte["dernier_rle"] = chemin
 
     print("--- Etape : decompression ---")
-    img, _ = fileio.load_rle(chemin, trace=True)
+    img, stats_decomp = fileio.load_rle(chemin, trace=True)
+    fileio.afficher_stats(stats_decomp, "DECOMPRESSION")
 
     print("--- Etape : verification ---")
     identique = np.array_equal(contexte["image"], img)
     print(f"  original == decompresse : {identique}\n")
 
     if not contexte["mode_texte"]:
-        draw.show_comparaison(contexte["image"], img)
+        draw.show_comparaison(contexte["image"], img, stats=stats)
+    else:
+        draw.afficher_texte(img, "Image decompressee", stats=stats)
 
 
 # ---------------------------------------------------------------------------
@@ -164,8 +171,12 @@ def option_exemple_guide():
 
     retour = rle.decode(donnees, nb_pixels_attendu=len(exemple), trace=True)
     print("Decodage identique a l'original :", retour == exemple)
-    print(f"11 octets -> 12 octets : le RLE a AGRANDI "
-          f"(image trop variee, voir le rapport)\n")
+
+    taux_ex = fileio.taux_compression(len(exemple), len(donnees))
+    print(f"Taille originale    : {len(exemple)} octets")
+    print(f"Taille compressee   : {len(donnees)} octets")
+    remarque = "gain de place" if taux_ex >= 0 else f"le RLE a grossi (+{-taux_ex:.2f} % d'expansion)"
+    print(f"Taux de compression : {taux_ex:+.2f} %  ({remarque})\n")
 
 
 # ---------------------------------------------------------------------------
@@ -248,7 +259,11 @@ def main():
             if contexte["image"] is not None else "aucune"
         )
         mode = "TEXTE" if contexte["mode_texte"] else "FENETRE"
-        print(f"  [image en memoire : {etat_image}  |  mode : {mode}]")
+        info_taux = (
+            f"  |  dernier taux : {contexte['dernieres_stats']['taux']:+.2f}%"
+            if contexte.get("dernieres_stats") else ""
+        )
+        print(f"  [image en memoire : {etat_image}  |  mode : {mode}{info_taux}]")
 
         choix = input("Votre choix : ").strip()
 

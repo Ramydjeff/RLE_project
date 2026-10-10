@@ -323,6 +323,10 @@ def afficher_trace(lignes, nb_pixels, nb_octets, titre, max_lignes=40):
 
     print(separateur)
     print(f"Pixels : {nb_pixels}  |  Octets RLE : {nb_octets}  |  Blocs : {len(lignes)}")
+    if nb_pixels > 0:
+        taux = (1.0 - (float(nb_octets) / float(nb_pixels))) * 100.0
+        remarque = f"gain de place : {taux:.2f} %" if taux >= 0 else f"le flux a grossi : {-taux:.2f} % d'expansion"
+        print(f"Taux de compression : {taux:+.2f} %  ({remarque})")
     print()
 
 
@@ -345,3 +349,6 @@ if __name__ == "__main__":
 
     retour = decode(resultat, nb_pixels_attendu=len(exemple), trace=True)
     print("Decodage sans perte :", retour == exemple)
+
+    taux_ex = (1.0 - (len(resultat) / len(exemple))) * 100.0
+    print(f"Taux de compression : {taux_ex:+.2f} % (11 pixels -> 12 octets)")

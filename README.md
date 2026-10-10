@@ -71,12 +71,17 @@ Si la fenêtre ne s'ouvre pas, l'option `7` du menu bascule en mode texte
 
 ## Résultats observés
 
+Formule du taux : $\text{Taux} = \left(1 - \frac{\text{Taille compressée}}{\text{Taille originale}}\right) \times 100$
+
+- **Positif (`+`)** : gain de place (compression efficace).
+- **Négatif (`−`)** : le fichier a grossi (expansion, cas d'une alternance fréquente de pixels).
+
 | Image | Original | Compressé | Taux |
 |---|---|---|---|
-| Carré noir 32×32 | 1024 o | 103 o | 89,94 % |
-| Dessin 6×8 (cœur) | 48 o | 39 o | 18,75 % |
-| Exemple du guide (11 px) | 11 o | 12 o | **−9 %** |
+| Carré noir 32×32 | 1024 o | 103 o | **+89,94 %** |
+| Dessin 6×8 (cœur) | 48 o | 39 o | **+18,75 %** |
+| Exemple du guide (11 px) | 11 o | 12 o | **−9,09 %** |
 | Damier 16×16 | 256 o | 262 o | **−2,34 %** |
 
 Le taux dépend entièrement du contenu : le RLE **agrandit** les images
-bruitées, car chaque petit bloc coûte 2 octets d'en-tête.
+bruitées ou trop courtes, car chaque bloc impose son mot de contrôle de 2 octets.

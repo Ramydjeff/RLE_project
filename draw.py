@@ -29,8 +29,8 @@ def ask_dimensions(maxi=512):
     Retourne un couple (hauteur, largeur).
     """
     print("\n--- Dimensions de l'image ---")
-    hauteur = demander_entier("Nombre de lignes   (hauteur n) : ", 1, maxi)
-    largeur = demander_entier("Nombre de colonnes (largeur  m) : ", 1, maxi)
+    hauteur = demander_entier("Nombre de lignes n : ", 1, maxi)
+    largeur = demander_entier("Nombre de colonnes m : ", 1, maxi)
     print(f"Image de {hauteur} x {largeur} = {hauteur * largeur} pixels.\n")
     return hauteur, largeur
 
@@ -162,21 +162,68 @@ def agrandir(img, zoom):
                       interpolation=cv2.INTER_NEAREST)
 
 
-def show(img, titre="Image", zoom=None):
-    """Affiche une image zoomee et attend une touche."""
+def ajouter_bandeau_info(image_bgr, stats=None):
+    """
+    Ajoute un bandeau informatif elegant en bas de l'image (OpenCV BGR).
+    Affiche les dimensions, tailles en octets et le taux de compression.
+    """
+    if stats is None:
+        return image_bgr
+
+    largeur_img = image_bgr.shape[1]
+    h_bandeau = 60
+    bandeau = np.full((h_bandeau, largeur_img, 3), (30, 30, 30), dtype=np.uint8)
+
+    # Ligne de separation gris clair
+    cv2.line(bandeau, (0, 0), (largeur_img, 0), (70, 70, 70), 1)
+
+    taille_orig = stats.get("taille_originale", 0)
+    taille_comp = stats.get("taille_compressee", 0)
+    taux = stats.get("taux", 0.0)
+
+    ligne1 = f"Originale: {taille_orig} octets  |  Compressee: {taille_comp} octets"
+    remarque = "Gain de place" if taux >= 0 else "Fichier grossi"
+    ligne2 = f"Taux de compression: {taux:+.2f} %  ({remarque})"
+
+    # Couleur du taux : vert si gain, orange/rouge si grossi
+    couleur_taux = (80, 220, 80) if taux >= 0 else (60, 100, 255)
+
+    # Echelle de police adaptee
+    scale = max(0.42, min(0.65, largeur_img / 600.0))
+    epaisseur = 1
+
+    cv2.putText(bandeau, ligne1, (15, 22), cv2.FONT_HERSHEY_SIMPLEX, scale, (220, 220, 220), epaisseur, cv2.LINE_AA)
+    cv2.putText(bandeau, ligne2, (15, 48), cv2.FONT_HERSHEY_SIMPLEX, scale, couleur_taux, epaisseur + 1, cv2.LINE_AA)
+
+    return np.vstack([image_bgr, bandeau])
+
+
+def show(img, titre="Image", zoom=None, stats=None):
+    """Affiche une image zoomee avec bandeau de stats optionnel et attend une touche."""
     if zoom is None:
         zoom = calculer_zoom(*img.shape)
-    cv2.imshow(titre, agrandir(img, zoom))
+
+    vue = agrandir(img, zoom)
+    vue_bgr = cv2.cvtColor(vue, cv2.COLOR_GRAY2BGR)
+
+    if stats is not None and "taux" in stats:
+        vue_bgr = ajouter_bandeau_info(vue_bgr, stats)
+        titre_fenetre = f"{titre} | Taux: {stats['taux']:+.2f}%  (touche pour fermer)"
+    else:
+        titre_fenetre = f"{titre}  (touche pour fermer)"
+
+    cv2.imshow(titre_fenetre, vue_bgr)
     print(f"[{titre}] Appuyez sur une touche dans la fenetre pour continuer...")
     cv2.waitKey(0)
     cv2.destroyAllWindows()
     cv2.waitKey(1)
 
 
-def show_comparaison(original, decompresse, zoom=None):
+def show_comparaison(original, decompresse, zoom=None, stats=None):
     """
     Affiche l'originale et la decompressee COTE A COTE,
-    separees par une bande grise.
+    separees par une bande grise, avec le taux de compression
+    dans le titre et dans un bandeau d'information.
     """
     if zoom is None:
         zoom = calculer_zoom(*original.shape)
@@ -187,9 +234,18 @@ def show_comparaison(original, decompresse, zoom=None):
     # Bande de separation grise de 10 pixels de large
     separation = np.full((gauche.shape[0], 10), 128, dtype=np.uint8)
     combinee = np.hstack([gauche, separation, droite])
+    combinee_bgr = cv2.cvtColor(combinee, cv2.COLOR_GRAY2BGR)
 
-    titre = "GAUCHE = originale   |   DROITE = decompressee  (touche pour fermer)"
-    cv2.imshow(titre, combinee)
+    if stats is not None and "taux" in stats:
+        combinee_bgr = ajouter_bandeau_info(combinee_bgr, stats)
+        taille_orig = stats.get("taille_originale", original.size)
+        taille_comp = stats.get("taille_compressee", 0)
+        titre = (f"Originale ({taille_orig} o) vs Decompressee ({taille_comp} o) | "
+                 f"Taux: {stats['taux']:+.2f}%  (touche pour fermer)")
+    else:
+        titre = "GAUCHE = originale   |   DROITE = decompressee  (touche pour fermer)"
+
+    cv2.imshow(titre, combinee_bgr)
     print("Comparaison affichee. Appuyez sur une touche dans la fenetre...")
     cv2.waitKey(0)
     cv2.destroyAllWindows()
@@ -222,10 +278,13 @@ def draw_image_texte(hauteur, largeur):
     return img
 
 
-def afficher_texte(img, titre="Image"):
+def afficher_texte(img, titre="Image", stats=None):
     """Affiche l'image dans la console en ASCII (pratique pour le rapport)."""
     hauteur, largeur = img.shape
     print(f"\n--- {titre} ({hauteur}x{largeur}) ---")
+    if stats is not None and "taux" in stats:
+        print(f"  [Taille : {stats['taille_originale']} o -> {stats['taille_compressee']} o "
+              f" | Taux : {stats['taux']:+.2f}%]")
     for ligne in range(hauteur):
         print("  " + "".join("#" if img[ligne, c] == 0 else "."
                              for c in range(largeur)))
@@ -248,6 +307,10 @@ def binariser(img):
 
 def charger_png(chemin):
     """Charge une image PNG/JPG en niveaux de gris, puis la binarise."""
+    # Meme nettoyage que pour les .rle : Windows colle des guillemets
+    # autour du chemin quand on fait "Copier en tant que chemin d'acces".
+    chemin = chemin.strip().strip('"').strip("'").strip()
+
     img = cv2.imread(chemin, cv2.IMREAD_GRAYSCALE)
     if img is None:
         raise FileNotFoundError(f"Impossible de lire l'image : {chemin}")

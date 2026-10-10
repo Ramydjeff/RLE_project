@@ -150,7 +150,7 @@ def test_fichier():
         stats = fileio.save_rle(chemin, img)
         relue, _ = fileio.load_rle(chemin)
         verifier(np.array_equal(img, relue), nom,
-                 f"taux = {stats['taux']:.1f} %")
+                 f"taux = {stats['taux']:+.1f} %")
 
     os.remove(chemin)
 

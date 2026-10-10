@@ -33,6 +33,19 @@ FORMAT_ENTETE = ">HH"
 TAILLE_ENTETE = struct.calcsize(FORMAT_ENTETE)   # vaut 4
 
 
+def nettoyer_chemin(chemin):
+    """
+    Nettoie un chemin saisi au clavier.
+
+    Windows ajoute des guillemets quand on fait
+    "Copier en tant que chemin d'acces" dans l'Explorateur :
+        "C:\\Users\\...\\dessin.rle"
+    Python chercherait alors un fichier dont le nom commence par un guillemet.
+    On retire donc les guillemets et les espaces parasites.
+    """
+    return chemin.strip().strip('"').strip("'").strip()
+
+
 # ---------------------------------------------------------------------------
 # ECRITURE
 # ---------------------------------------------------------------------------
@@ -47,6 +60,7 @@ def save_rle(chemin, img, trace=False):
 
     Retourne un dictionnaire de statistiques.
     """
+    chemin = nettoyer_chemin(chemin)
     hauteur, largeur = img.shape
 
     # Securite : le compteur de l'en-tete tient sur 16 bits
@@ -72,6 +86,7 @@ def save_rle(chemin, img, trace=False):
         "hauteur": hauteur,
         "taille_originale": taille_originale,
         "taille_compressee": taille_compressee,
+        "taille_rle_brut": len(donnees),
         "taux": taux_compression(taille_originale, taille_compressee),
     }
 
@@ -80,12 +95,15 @@ def save_rle(chemin, img, trace=False):
 # LECTURE
 # ---------------------------------------------------------------------------
 
+
 def load_rle(chemin, trace=False):
     """
     Lit un fichier .rle, le decompresse et reconstruit l'image 2D.
 
     Retourne un couple (image numpy 2D, dictionnaire de statistiques).
     """
+    chemin = nettoyer_chemin(chemin)
+
     if not os.path.exists(chemin):
         raise FileNotFoundError(f"Fichier introuvable : {chemin}")
 
@@ -109,12 +127,14 @@ def load_rle(chemin, trace=False):
     img = np.array(pixels, dtype=np.uint8).reshape(hauteur, largeur)
 
     taille_originale = largeur * hauteur
+    taille_compressee = len(contenu)
     stats = {
         "largeur": largeur,
         "hauteur": hauteur,
         "taille_originale": taille_originale,
-        "taille_compressee": len(contenu),
-        "taux": taux_compression(taille_originale, len(contenu)),
+        "taille_compressee": taille_compressee,
+        "taille_rle_brut": len(donnees),
+        "taux": taux_compression(taille_originale, taille_compressee),
     }
     return img, stats
 
@@ -125,28 +145,32 @@ def load_rle(chemin, trace=False):
 
 def taux_compression(taille_originale, taille_compressee):
     """
-    taux = (1 - compressee / originale) * 100
+    Calcule le taux de compression en pourcentage :
+        taux = (1 - taille_compressee / taille_originale) * 100
 
-    Positif  -> on a gagne de la place.
-    Negatif  -> le fichier a GROSSI (cas d'une image bruitee / damier).
+    - Positif (> 0) : gain de place (compression efficace).
+    - Negatif (< 0) : le fichier a GROSSI (cas d'une image bruitee / damier).
+    - 0%            : taille inchangee.
     """
-    if taille_originale == 0:
+    if taille_originale <= 0:
         return 0.0
-    return (1 - taille_compressee / taille_originale) * 100
+    return (1.0 - (float(taille_compressee) / float(taille_originale))) * 100.0
 
 
 def afficher_stats(stats, titre="STATISTIQUES"):
     """Affiche proprement le bilan de compression."""
     print(f"--- {titre} ---")
-    print(f"  Dimensions        : {stats['hauteur']} lignes x "
-          f"{stats['largeur']} colonnes")
-    print(f"  Taille originale  : {stats['taille_originale']} octets (1 octet/pixel)")
-    print(f"  Taille compressee : {stats['taille_compressee']} octets "
+    print(f"  Dimensions          : {stats['hauteur']} lignes x "
+          f"{stats['largeur']} colonnes ({stats['largeur'] * stats['hauteur']} pixels)")
+    print(f"  Taille originale    : {stats['taille_originale']} octets (1 octet/pixel)")
+    print(f"  Taille fichier .rle : {stats['taille_compressee']} octets "
           f"(dont {TAILLE_ENTETE} d'en-tete)")
+    if "taille_rle_brut" in stats:
+        print(f"  Donnees RLE pures   : {stats['taille_rle_brut']} octets")
 
     taux = stats["taux"]
     if taux >= 0:
-        print(f"  Taux de compression : {taux:.2f} %  (gain de place)")
+        print(f"  Taux de compression : {taux:+.2f} %  (gain de place : {taux:.2f} % d'espace gagne)")
     else:
-        print(f"  Taux de compression : {taux:.2f} %  (le fichier a GROSSI)")
+        print(f"  Taux de compression : {taux:+.2f} %  (le fichier a GROSSI : {-taux:.2f} % d'expansion)")
     print()
